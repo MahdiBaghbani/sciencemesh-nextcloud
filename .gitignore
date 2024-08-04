@@ -1,9 +1,12 @@
-composer.lock
-vendor/*
-build
 *~
+.idea
 .phplint-cache
-tests/coverage
-cov.html/
 .php_cs.cache
+
+build
+vendor/*
+cov.html/
+tests/coverag
 build/tools/composer.phar
+
+composer.lock
