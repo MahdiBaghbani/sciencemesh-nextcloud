@@ -2,222 +2,232 @@
 
 namespace OCA\ScienceMesh\Controller;
 
-use OCP\IRequest;
-use OCP\IUserManager;
-use OCP\IURLGenerator;
-use OCP\IConfig;
-use OCP\Mail\IMailer;
-use OCP\Mail\IMessage;
-use OCP\Mail\IMailerException;
+use OCA\ScienceMesh\RevaHttpClient;
+use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
+use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Http\TextPlainResponse;
-use OCP\AppFramework\Http\DataResponse;
-use OCP\AppFramework\Controller;
-use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\Notification\IManager as INotificationManager;
+use OCP\IConfig;
+use OCP\IRequest;
 use OCP\IUserSession;
-use OCA\ScienceMesh\RevaHttpClient;
-use OCA\ScienceMesh\Plugins\ScienceMeshGenerateTokenPlugin;
-use OCA\ScienceMesh\Plugins\ScienceMeshAcceptTokenPlugin;
+use OCP\Mail\IMailer;
+use OCP\Mail\IMailerException;
+use OCP\Notification\IManager as INotificationManager;
+use Psr\Log\LoggerInterface;
 
-class AppController extends Controller {
-	private $userId;
-	private $userManager;
-	private $urlGenerator;
-	private $config;
-	private $userSession;
-	private $generateToken;
-	private $acceptToken;
-	private $httpClient;
-	private $mailer;
+class AppController extends Controller
+{
+  private IConfig $config;
+  private IMailer $mailer;
+  private INotificationManager $notificationManager;
+  private ITimeFactory $timeFactory;
+  private IUserSession $userSession;
+  private RevaHttpClient $httpClient;
+  private string $userId;
+  private IRequest $request;
+  private LoggerInterface $logger;
 
-	public function __construct($AppName, ITimeFactory $timeFactory, INotificationManager $notificationManager, IRequest $request, IConfig $config, IUserManager $userManager, IURLGenerator $urlGenerator, $userId, IUserSession $userSession, RevaHttpClient $httpClient, IMailer $mailer) {
-		parent::__construct($AppName, $request);
-			  
-		$this->userId = $userId;
-		$this->userManager = $userManager;
-		$this->request = $request;
-		$this->urlGenerator = $urlGenerator;
-		$this->notificationManager = $notificationManager;
-		$this->timeFactory = $timeFactory;
-		$this->config = $config;
-		$this->serverConfig = new \OCA\ScienceMesh\ServerConfig($config, $urlGenerator, $userManager);
-		$this->userSession = $userSession;
-		$this->httpClient = $httpClient;
-		$this->mailer = $mailer;
+  public function __construct(
+    $AppName,
+    IConfig $config,
+    IMailer $mailer,
+    INotificationManager $notificationManager,
+    IRequest $request,
+    ITimeFactory $timeFactory,
+    IUserSession $userSession,
+    RevaHttpClient $httpClient,
+    string $userId,
+    LoggerInterface $logger
+  ) {
+    parent::__construct($AppName, $request);
 
-	}
+    $this->userId = $userId;
+    $this->request = $request;
+    $this->config = $config;
+    $this->userSession = $userSession;
+    $this->httpClient = $httpClient;
+    $this->mailer = $mailer;
+    $this->notificationManager = $notificationManager;
+    $this->timeFactory = $timeFactory;
+    $this->logger = $logger;
+  }
 
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function notifications() {
-		$user = $this->userSession->getUser();
-		//$user = $this->userManager->get("alice");
-		$shortMessage = "ScienceMesh notification!";
-		$longMessage = "A longer notification message from ScienceMesh";
-		$notification = $this->notificationManager->createNotification();
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function notifications()
+  {
+    $user = $this->userSession->getUser();
+    $shortMessage = "ScienceMesh notification!";
+    $longMessage = "A longer notification message from ScienceMesh";
+    $notification = $this->notificationManager->createNotification();
 
-		$time = $this->timeFactory->getTime();
-		$datetime = new \DateTime();
-		$datetime->setTimestamp($time);
+    $time = $this->timeFactory->getTime();
+    $datetime = new \DateTime();
+    $datetime->setTimestamp($time);
 
-		try {
-			$acceptAction = $notification->createAction();
-			$acceptAction->setLabel('accept')->setLink("shared", "GET");
+    try {
+      $acceptAction = $notification->createAction();
+      $acceptAction->setLabel('accept')->setLink("shared", "GET");
 
-			$declineAction = $notification->createAction();
-			$declineAction->setLabel('decline')->setLink("shared", "GET");
+      $declineAction = $notification->createAction();
+      $declineAction->setLabel('decline')->setLink("shared", "GET");
 
-			$notification->setApp('sciencemesh')
-				->setUser($user->getUID())
-				->setDateTime($datetime)
-				->setObject('sciencemesh', dechex($time))
-				->setSubject('remote_share', [$shortMessage])
-				->addAction($acceptAction)
-				->addAction($declineAction)
-						;
-			if ($longMessage !== '') {
-				$notification->setMessage('remote_share', [$longMessage]);
-			}
+      $notification->setApp('sciencemesh')
+        ->setUser($user->getUID())
+        ->setDateTime($datetime)
+        ->setObject('sciencemesh', dechex($time))
+        ->setSubject('remote_share', [$shortMessage])
+        ->addAction($acceptAction)
+        ->addAction($declineAction);
+      if ($longMessage !== '') {
+        $notification->setMessage('remote_share', [$longMessage]);
+      }
 
-			$this->notificationManager->notify($notification);
-		} catch (\InvalidArgumentException $e) {
-			return new DataResponse(null, Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-
-		$notificationsData = [
-		];
-		$templateResponse = new TemplateResponse('sciencemesh', 'notifications', $notificationsData);
-		$policy = new ContentSecurityPolicy();
-		$policy->addAllowedStyleDomain("data:");
-		$policy->addAllowedScriptDomain("'self'");
-		$policy->addAllowedScriptDomain("'unsafe-inline'");
-		$policy->addAllowedScriptDomain("'unsafe-eval'");
-		$templateResponse->setContentSecurityPolicy($policy);
-		return $templateResponse;
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function generate() {
-		return new TemplateResponse('sciencemesh', 'generate');
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function accept() {
-		return new TemplateResponse('sciencemesh', 'accept');
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function invitationsGenerate() {
-		$recipient = $this->request->getParam('email');
-		$invitationsData = $this->httpClient->generateTokenFromReva($this->userId, $recipient);
-
-		// check if invite_link exist before accessing.
-		$inviteLinkStr = isset($invitationsData["invite_link"]) ? $invitationsData["invite_link"] : false;
-
-    	if (!$inviteLinkStr) {
-			return new TextPlainResponse("Unexpected response from Reva", Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-
-		return new TextPlainResponse("$inviteLinkStr", Http::STATUS_OK);
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function invitationsSends($AppName) {
-		$email = $this->request->getParam('email');
-		$token = $this->request->getParam('token');
-		
-		$recipientEmail = $email;
-		$subject = 'New Token generated by '.$AppName.' send from '.$this->userId ;
-		$message = 'You can open this URL to accept the invitation<br>'.$token;
-
-		$mailer = $this->sendNotification($recipientEmail, $subject, $message);
-		return new TextPlainResponse($mailer, Http::STATUS_OK);
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function contacts() {
-		$contactsData = [
-		];
-		return new TemplateResponse('sciencemesh', 'contacts', $contactsData);
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function contactsAccept() {
-		$providerDomain = $this->request->getParam('providerDomain');
-		$token = $this->request->getParam('token');
-		$result = $this->httpClient->acceptInvite($providerDomain, $token, $this->userId);
-		return new TextPlainResponse($result, Http::STATUS_OK);
-	}
-
-	/**
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-
-	public function contactsFindUsers($searchToken = "") {
-		$find_users_json = $this->httpClient->findAcceptedUsers($this->userId);
-
-		$find_users = json_decode($find_users_json, false);
-		$return_users = array();
-		if(strlen($searchToken) > 0){
-			if(!empty($find_users)){
-				for($i = count($find_users); $i >= 0 ; $i--){
-					if(str_contains($find_users[$i]->display_name, $searchToken) and !is_null($find_users[$i])){
-						$return_users[] = $find_users[$i];
-					}
-				}
-			}
-		}else{
-			$return_users = json_decode($find_users_json, false);
-		}
-
-		return new TextPlainResponse(json_encode($return_users), Http::STATUS_OK);
-	}
-
-	public function sendNotification(string $recipient, string $subject, string $message): bool
-    {
-        try {
-            // Create a new email message
-            $mail = $this->mailer->createMessage();
-            $mail->setTo([$recipient]);
-            $mail->setSubject($subject);
-            $mail->setPlainBody($message);
-
-            // Set the "from" email address
-            $fromEmail = $this->config->getSystemValue('fromemail', 'no-reply@cs3mesh4eosc.eu');
-            $mail->setFrom([$fromEmail]);
-
-            // Send the email
-            $this->mailer->send($mail);
-            
-            return true;
-        } catch (IMailerException $e) {
-            // Handle the exception or log the error
-            return false;
-        }
+      $this->notificationManager->notify($notification);
+    } catch (\InvalidArgumentException $e) {
+      $this->logger->error('Could not create notification: ' . $e->getMessage());
+      return new DataResponse(null, Http::STATUS_INTERNAL_SERVER_ERROR);
     }
 
+    $notificationsData = [];
+    $templateResponse = new TemplateResponse('sciencemesh', 'notifications', $notificationsData);
+    $policy = new ContentSecurityPolicy();
+    $policy->addAllowedStyleDomain("data:");
+    $policy->addAllowedScriptDomain("'self'");
+    $policy->addAllowedScriptDomain("'unsafe-inline'");
+    $policy->addAllowedScriptDomain("'unsafe-eval'");
+    $templateResponse->setContentSecurityPolicy($policy);
+    return $templateResponse;
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function generate()
+  {
+    return new TemplateResponse('sciencemesh', 'generate');
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function accept()
+  {
+    return new TemplateResponse('sciencemesh', 'accept');
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function invitationsGenerate()
+  {
+    $recipient = $this->request->getParam('email');
+    $invitationsData = $this->httpClient->generateTokenFromReva($this->userId, $recipient);
+
+    // check if invite_link exist before accessing.
+    $inviteLinkStr = isset($invitationsData["invite_link"]) ? $invitationsData["invite_link"] : false;
+
+    if (!$inviteLinkStr) {
+      return new TextPlainResponse("Unexpected response from Reva", Http::STATUS_INTERNAL_SERVER_ERROR);
+    }
+
+    return new TextPlainResponse("$inviteLinkStr", Http::STATUS_OK);
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function invitationsSends($AppName)
+  {
+    $email = $this->request->getParam('email');
+    $token = $this->request->getParam('token');
+
+    $recipientEmail = $email;
+    $subject = 'New Token generated by ' . $AppName . ' send from ' . $this->userId;
+    $message = 'You can open this URL to accept the invitation<br>' . $token;
+
+    $mailer = $this->sendNotification($recipientEmail, $subject, $message);
+    return new TextPlainResponse($mailer, Http::STATUS_OK);
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function contacts()
+  {
+    $contactsData = [];
+    return new TemplateResponse('sciencemesh', 'contacts', $contactsData);
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+  public function contactsAccept()
+  {
+    $providerDomain = $this->request->getParam('providerDomain');
+    $token = $this->request->getParam('token');
+    $result = $this->httpClient->acceptInvite($providerDomain, $token, $this->userId);
+    return new TextPlainResponse($result, Http::STATUS_OK);
+  }
+
+  /**
+   * @NoAdminRequired
+   * @NoCSRFRequired
+   */
+
+  public function contactsFindUsers($searchToken = "")
+  {
+    $find_users_json = $this->httpClient->findAcceptedUsers($this->userId);
+
+    $find_users = json_decode($find_users_json, false);
+    $return_users = array();
+    if (strlen($searchToken) > 0) {
+      if (!empty($find_users)) {
+        for ($i = count($find_users); $i >= 0; $i--) {
+          if (str_contains($find_users[$i]->display_name, $searchToken) and !is_null($find_users[$i])) {
+            $return_users[] = $find_users[$i];
+          }
+        }
+      }
+    } else {
+      $return_users = json_decode($find_users_json, false);
+    }
+
+    return new TextPlainResponse(json_encode($return_users), Http::STATUS_OK);
+  }
+
+  public function sendNotification(string $recipient, string $subject, string $message): bool
+  {
+    try {
+      // Create a new email message
+      $mail = $this->mailer->createMessage();
+      $mail->setTo([$recipient]);
+      $mail->setSubject($subject);
+      $mail->setPlainBody($message);
+
+      // Set the "from" email address
+      $fromEmail = $this->config->getSystemValue('fromemail', 'no-reply@cs3mesh4eosc.eu');
+      $mail->setFrom([$fromEmail]);
+
+      // Send the email
+      $this->mailer->send($mail);
+
+      return true;
+    } catch (IMailerException $e) {
+      // Handle the exception or log the error
+      $this->logger->error($e->getMessage());
+      return false;
+    }
+  }
 }

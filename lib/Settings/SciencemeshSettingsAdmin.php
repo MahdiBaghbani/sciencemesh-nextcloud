@@ -16,7 +16,7 @@ class SciencemeshSettingsAdmin implements ISettings {
                                 ) {
         $this->config = $config;
         $this->l = $l;
-        $this->serverConfig = new \OCA\ScienceMesh\ServerConfig($config);
+        $this->serverConfig = new ServerConfig($config);
 
     }
 

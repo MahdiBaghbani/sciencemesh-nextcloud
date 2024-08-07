@@ -2,56 +2,47 @@
 
 namespace OCA\ScienceMesh;
 
-use \DateInterval;
-use \DateTime;
 
+use OCP\IAppConfig;
 use OCP\IConfig;
-use OCP\ILogger;
 
 /**
- * Application configutarion
+ * Application configuration
  *
  * @package OCA\ScienceMesh
  */
-class AppConfig {
+class AppConfig
+{
 
-    /**
-     * Application name
-     *
-     * @var string
-     */
-    private $appName;
+  private string $appName;
 
-    /**
-     * Config service
-     *
-     * @var IConfig
-     */
-    private $config;
+  private IAppConfig $appConfig;
+  private IConfig $config;
 
-    /**
-     * Logger
-     *
-     * @var ILogger
-     */
-    private $logger;
 
-    /**
-     * @param string $AppName - application name
-     */
-    public function __construct($AppName) {
+  /**
+   * @param string $AppName - application name
+   * @param IAppConfig $appConfig - appConfig
+   * @param IConfig $config - config
+   */
+  public function __construct(
+    $AppName,
+    IAppConfig $appConfig
+  ) {
 
-        $this->appName = $AppName;
+    $this->appName = $AppName;
 
-        $this->config = \OC::$server->getConfig();
-        $this->logger = \OC::$server->getLogger();
-    }
+    $this->config = $appConfig;
+  }
 
-    public function GetConfigValue($key) {
-        return $this->config->getSystemValue($this->appName)[$key];
-    }
+  // FIXME: This does not seem right, it is setting a system value, but getting an app value
+  public function GetConfigValue($key)
+  {
+    return $this->config->getSystemValue($this->appName)[$key];
+  }
 
-    public function SetConfigValue($key, $value) {
-        $this->config->setAppValue($this->appName, $key, $value);
-    }
+  public function SetConfigValue(string $key, string $value)
+  {
+    $this->appConfig->setValueString($this->appName, $key, $value);
+  }
 }
