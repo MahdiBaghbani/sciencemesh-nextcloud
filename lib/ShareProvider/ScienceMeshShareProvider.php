@@ -19,10 +19,10 @@ use OCP\Constants;
 use OCP\Federation\ICloudFederationProviderManager;
 use OCP\Federation\ICloudIdManager;
 use OCP\Files\IRootFolder;
+use OCP\GlobalScale\IConfig as GlobalScaleIConfig;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
-use OCP\ILogger;
 use OCP\IUserManager;
 use OCP\Share\Exceptions\ShareNotFound;
 use OCP\Share\IShare;
@@ -30,7 +30,7 @@ use OCA\ScienceMesh\RevaHttpClient;
 use OCA\FederatedFileSharing\AddressHandler;
 use OCA\FederatedFileSharing\Notifications;
 use OCA\FederatedFileSharing\TokenHandler;
-use OCA\ScienceMesh\AppInfo\ScienceMeshApp;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class ScienceMeshShareProvider
@@ -50,7 +50,7 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 	 * @param Notifications $notifications
 	 * @param TokenHandler $tokenHandler
 	 * @param IL10N $l10n
-	 * @param ILogger $logger
+	 * @param LoggerInterface $logger
 	 * @param IRootFolder $rootFolder
 	 * @param IConfig $config
 	 * @param IUserManager $userManager
@@ -64,12 +64,12 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 			Notifications $notifications,
 			TokenHandler $tokenHandler,
 			IL10N $l10n,
-			ILogger $logger,
+			LoggerInterface $logger,
 			IRootFolder $rootFolder,
 			IConfig $config,
 			IUserManager $userManager,
 			ICloudIdManager $cloudIdManager,
-			\OCP\GlobalScale\IConfig $globalScaleConfig,
+			GlobalScaleIConfig $globalScaleConfig,
 			ICloudFederationProviderManager $cloudFederationProviderManager
 	) {
 		parent::__construct(
@@ -121,7 +121,7 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 	 * @throws \Exception
 	 */
 	public function createInternal(IShare $share) {
-		error_log("SSP create");
+		$this->logger->error("SSP create");
 		$shareWith = $share->getSharedWith();
 
 		/*
@@ -380,6 +380,35 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 	}
 
 	/**
+	 * Get a share by name
+	 *
+	 * @param string $name
+	 * @return IShare
+	 * @throws ShareNotFound
+	 */
+	public function getSentShareByName($name) {
+		$this->logger->error("share provider getSentShareByName {$name}");
+		$qb = $this->dbConnection->getQueryBuilder();
+		$cursor = $qb->select('*')
+			->from('share')
+			->where($qb->expr()->eq('name', $qb->createNamedParameter($name)))
+			->executeQuery();
+		$data = $cursor->fetch();
+		if ($data === false) {
+			$this->logger->error("sent share not found by name {$name}");
+			throw new ShareNotFound('Share not found', $this->l->t('Could not find share'));
+		}
+		try {
+			$share = $this->createShareObject($data);
+		} catch (InvalidShare $e) {
+			$this->logger->error("sent share found invalid by name {$name} {$e->getMessage()}");
+			throw new ShareNotFound('Share not found', $this->l->t('Could not find share'));
+		}
+		$this->logger->error("found sent share {$data['id']} by name {$name}");
+		return $share;
+	}
+
+	/**
 	 * Get a share by token
 	 *
 	 * @param string $token
@@ -387,7 +416,7 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 	 * @throws ShareNotFound
 	 */
 	public function getSentShareByToken($token) {
-		error_log("share provider getSentShareByToken '$token'");
+		$this->logger->error("share provider getSentShareByToken '$token'");
 		$qb = $this->dbConnection->getQueryBuilder();
 		$cursor = $qb->select('*')
 			->from('share')
@@ -395,16 +424,16 @@ class ScienceMeshShareProvider extends FederatedShareProviderCopy {
 			->execute();
 		$data = $cursor->fetch();
 		if ($data === false) {
-			error_log("sent share not found by token '$token'");
+			$this->logger->error("sent share not found by token '$token'");
 			throw new ShareNotFound('Share not found', $this->l->t('Could not find share'));
 		}
 		try {
 			$share = $this->createShareObject($data);
 		} catch (InvalidShare $e) {
-			error_log("sent share found invalid by token '$token'");
+			$this->logger->error("sent share found invalid by token '$token'");
 			throw new ShareNotFound('Share not found', $this->l->t('Could not find share'));
 		}
-		error_log("found sent share ". $data["id"] . " by token '$token'");
+		$this->logger->error("found sent share ". $data["id"] . " by token '$token'");
 		return $share;
 	}
 

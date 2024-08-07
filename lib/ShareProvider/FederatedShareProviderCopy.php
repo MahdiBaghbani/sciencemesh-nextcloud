@@ -50,7 +50,6 @@ use OCP\Files\NotFoundException;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
-use OCP\ILogger;
 use OCP\IUserManager;
 use OCP\Share\Exceptions\GenericShareException;
 use OCP\Share\Exceptions\ShareNotFound;
@@ -59,7 +58,7 @@ use OCP\Share\IShareProvider;
 use OCA\FederatedFileSharing\AddressHandler;
 use OCA\FederatedFileSharing\Notifications;
 use OCA\FederatedFileSharing\TokenHandler;
-use OCA\ScienceMesh\AppInfo\ScienceMeshApp;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class FederatedShareProvider
@@ -84,7 +83,7 @@ class FederatedShareProviderCopy implements IShareProvider {
 	/** @var IL10N */
 	protected $l;
 
-	/** @var ILogger */
+	/** @var LoggerInterface */
 	protected $logger;
 
 	/** @var IRootFolder */
@@ -119,7 +118,7 @@ class FederatedShareProviderCopy implements IShareProvider {
 	 * @param Notifications $notifications
 	 * @param TokenHandler $tokenHandler
 	 * @param IL10N $l10n
-	 * @param ILogger $logger
+	 * @param LoggerInterface $logger
 	 * @param IRootFolder $rootFolder
 	 * @param IConfig $config
 	 * @param IUserManager $userManager
@@ -133,7 +132,7 @@ class FederatedShareProviderCopy implements IShareProvider {
 		Notifications $notifications,
 		TokenHandler $tokenHandler,
 		IL10N $l10n,
-		ILogger $logger,
+		LoggerInterface $logger,
 		IRootFolder $rootFolder,
 		IConfig $config,
 		IUserManager $userManager,
