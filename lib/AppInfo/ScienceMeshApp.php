@@ -12,6 +12,8 @@ use OCP\Notification\IManager as NotificationManager;
 use OCA\ScienceMesh\Plugins\ScienceMeshSearchPlugin;
 use OCA\ScienceMesh\ShareProvider\ScienceMeshShareProvider;
 use OCA\ScienceMesh\Notifier\ScienceMeshNotifier;
+use OCA\ScienceMesh\Listener\LoadAdditionalScriptsListener;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
 
 class ScienceMeshApp extends App implements IBootstrap
 {
@@ -59,6 +61,10 @@ class ScienceMeshApp extends App implements IBootstrap
     $this->shareManager->registerShareProvider(ScienceMeshShareProvider::class);
 
     $this->notificationManager->registerApp(ScienceMeshNotifier::class);
+    $context->registerEventListener(
+      LoadAdditionalScriptsEvent::class,
+      LoadAdditionalScriptsListener::class
+    );
   }
   public function boot(IBootContext $context): void
   {
